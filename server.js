@@ -2,6 +2,97 @@ import { buildSchema } from 'graphql';
 import { createHandler } from 'graphql-http/lib/use/express';
 import express from 'express';
 import { ruruHTML } from 'ruru/server';
+import {
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLString,
+  GraphQLNonNull,
+  GraphQLInterfaceType,
+} from 'graphql';
+ 
+const ContentItemInterface = new GraphQLInterfaceType({
+  name: 'ContentItem',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: GraphQLString },
+    publishedAt: { type: GraphQLString },
+  },
+  resolveType(value) {
+    if (value.audioUrl) {
+      return 'PodcastEpisode';
+    }
+    if (value.bodyText) {
+      return 'Article';
+    }
+    return null;
+  },
+});
+ 
+const ArticleType = new GraphQLObjectType({
+  name: 'Article',
+  interfaces: [ContentItemInterface],
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: GraphQLString },
+    publishedAt: { type: GraphQLString },
+    bodyText: { type: GraphQLString },
+  },
+  isTypeOf: (value) => value.bodyText !== undefined,
+});
+ 
+const PodcastEpisodeType = new GraphQLObjectType({
+  name: 'PodcastEpisode',
+  interfaces: [ContentItemInterface],
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: GraphQLString },
+    publishedAt: { type: GraphQLString },
+    audioUrl: { type: GraphQLString },
+  },
+  // isTypeOf is a fallback for the resolveType function from the interface and is optional
+  isTypeOf: (value) => value.audioUrl !== undefined,
+});
+
+
+
+
+const UserType = new GraphQLObjectType({
+  name: 'User',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});
+ 
+const UserQueryType = new GraphQLObjectType({
+  name: 'Query',
+  fields: {
+    user: {
+      type: UserType,
+      resolve: () => ({ id: null }),
+    },
+  },
+});
+
+const ProductType = new GraphQLObjectType({
+  name: 'Product',
+  fields: {
+    name: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});
+ 
+const ProductQueryType = new GraphQLObjectType({
+  name: 'Query',
+  fields: {
+    product: {
+      type: ProductType,
+      resolve: () => ({ name: null }),
+    },
+  },
+});
+
+const schemaWithUserError = new GraphQLSchema({ query: UserQueryType });
+
+const schemaWithProductError = new GraphQLSchema({ query: ProductQueryType });
 
 // Construct a schema, using GraphQL schema language
 const schema = buildSchema(`
@@ -128,6 +219,8 @@ const app = express();
 app.all(
   '/graphql',
   createHandler({
+    // schema: schemaWithUserError,
+    // schema: schemaWithProductError,
     schema: schema,
     rootValue: root,
   }),
@@ -142,6 +235,10 @@ app.get('/', (_req, res) => {
 // Start the server at port
 app.listen(4000);
 console.log('Running a GraphQL API server at http://localhost:4000/graphql');
+
+
+
+
 
 fetch('http://localhost:4000/graphql', {
   method: 'POST',
@@ -214,3 +311,41 @@ fetch('http://localhost:4000/graphql', {
 })
   .then((r) => r.json())
   .then((data) => console.log('data returned:', data));
+
+
+
+
+
+// example error using schemaWithUserError
+fetch('http://localhost:4000/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+  body: JSON.stringify({ query: '{ user { id } }' }),
+})
+  .then((r) => r.json())
+  .then((data) => console.log('data returned:', data));
+
+
+
+
+
+// example error using schemaWithProductError
+fetch('http://localhost:4000/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+  body: JSON.stringify({ query: '{ product { name } }' }),
+})
+  .then((r) => r.json())
+  .then((data) => console.log('data returned:', data));
+
+
+
+
+
+
