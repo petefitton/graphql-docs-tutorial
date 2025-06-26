@@ -17,7 +17,13 @@ import {
  
 const fakeDatabase = {
   messages: [],
-  articles: []
+  articles: [],
+  authors: [],
+  books: [
+    {id: "0", title: "Book title or Author name or Publisher name"},
+    {id: "1", title: "Other book title"}
+  ],
+  publishers: []
 };
 
 
@@ -31,25 +37,64 @@ class ArticleClass {
 
 
 
-// const SearchResultType = new GraphQLUnionType({
-//   name: 'SearchResult',
-//   types: [BookType, AuthorType, PublisherType],
-//   resolveType(value, context, info) {
-//     console.log(value);
-//     console.log(context);
-//     console.log(info);
-//     if (value.isbn) {
-//       return 'Book';
-//     }
-//     if (value.bio) {
-//       return 'Author';
-//     }
-//     if (value.catalogSize) {
-//       return 'Publisher';
-//     }
-//     return null;
-//   },
-// });
+
+const Book = new GraphQLObjectType({
+  name: 'Book',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    title: { type: GraphQLString },
+    isbn: { type: GraphQLString },
+  },
+  // isTypeOf is a fallback for the resolveType function from the interface and is optional
+  isTypeOf: (value) => value.title !== undefined,
+});
+
+const Author = new GraphQLObjectType({
+  name: 'Author',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    name: { type: GraphQLString },
+    bio: { type: GraphQLString },
+  },
+  // isTypeOf is a fallback for the resolveType function from the interface and is optional
+  isTypeOf: (value) => value.bio !== undefined,
+});
+
+const Publisher = new GraphQLObjectType({
+  name: 'Publisher',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLString) },
+    name: { type: GraphQLString },
+    catalogSize: { type: GraphQLInt},
+  },
+  // isTypeOf is a fallback for the resolveType function from the interface and is optional
+  isTypeOf: (value) => value.catalogSize !== undefined,
+});
+
+
+const SearchResult = new GraphQLUnionType({
+  name: 'SearchResult',
+  types: [Book, Author, Publisher],
+  resolveType(value, context, info) {
+    console.log("value", value);
+    // console.log(context);
+    // console.log(info);
+    if (value.title) {
+      return 'Book';
+    }
+    if (value.bio) {
+      return 'Author';
+    }
+    if (value.catalogSize) {
+      return 'Publisher';
+    }
+    return null;
+  },
+});
+
+
+
+
 
 
 const ContentItemInterface = new GraphQLInterfaceType({
@@ -185,6 +230,69 @@ const schemaJS = new GraphQLSchema({
           // }
           // console.log("output:", output)
           // return output
+        }
+      },
+      author: {
+        type: Author,
+        args: {
+          id: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: (_, args) => {
+          return fakeDatabase.authors[args.id]
+        }
+      },
+      authors: {
+        type: new GraphQLList(Author),
+        resolve: () => {
+          return fakeDatabase.authors
+        }
+      },
+      publisher: {
+        type: Publisher,
+        args: {
+          id: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: (_, args) => {
+          return fakeDatabase.publishers[args.id]
+        }
+      },
+      publishers: {
+        type: new GraphQLList(Publisher),
+        resolve: () => {
+          return fakeDatabase.publishers
+        }
+      },
+      book: {
+        type: Book,
+        args: {
+          id: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: (_, args) => {
+          return fakeDatabase.books[args.id]
+        }
+      },
+      books: {
+        type: new GraphQLList(Book),
+        resolve: () => {
+          return fakeDatabase.books
+        }
+      },
+      search: {
+        type: new GraphQLList(SearchResult),
+        args: {
+          term: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: (_, args) => {
+          console.log("args", args)
+          console.log("fakeDatabase.books", fakeDatabase.books)
+          let foundBooks = []
+          fakeDatabase.books.map(book => {
+            if(book.title.includes(args.term)) {
+              foundBooks.push(book)
+            }
+          })
+          console.log("foundBooks", foundBooks)
+          return foundBooks
         }
       }
     },
@@ -630,24 +738,42 @@ fetch('http://localhost:4000/graphql', {
 
 
 
-  // TODO: Find out where this is supposed to go
-//   query Search($term: String! = "deep learning") {
-//   search(term: $term) {
-//     # Inline fragments with type condition:
-//     ... on Book {
-//       title
-//       isbn
-//     }
-//     ... on Author {
-//       name
-//       bio
-//     }
-//     # Named fragment:
-//     ...publisherFrag
-//   }
-// }
- 
-// fragment publisherFrag on Publisher {
-//   name
-//   catalogSize
-// }
+query = /* GraphQL */ `
+  query Search($term: String! = "deep learning") {
+    search(term: $term) {
+      # Inline fragments with type condition:
+      ... on Book {
+        title
+        isbn
+      }
+      ... on Author {
+        name
+        bio
+      }
+      # Named fragment:
+      ...publisherFrag
+    }
+  }
+  
+  fragment publisherFrag on Publisher {
+    name
+    catalogSize
+  }
+`
+let term = "Book title or Author name or Publisher name"
+
+fetch('http://localhost:4000/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+  body: JSON.stringify({
+    query,
+    variables: {
+      term
+    },
+  }),
+})
+  .then((r) => r.json())
+  .then((data) => console.log('data returned:', data));
